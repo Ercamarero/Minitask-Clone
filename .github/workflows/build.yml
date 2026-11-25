@@ -1,0 +1,56 @@
+name: Build y firma
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - run: pip install -r requirements.txt
+
+      - run: python -m PyInstaller --onefile --windowed --name MiniTaskClon --icon icon.ico --add-data "icon.ico;." --noconfirm minitask.py
+
+      - id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiniTaskClon-sin-firmar
+          path: dist/MiniTaskClon.exe
+
+  sign:
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # Rellena estos valores cuando SignPath apruebe el proyecto:
+      #  - secret SIGNPATH_API_TOKEN
+      #  - variables SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_POLICY_SLUG
+      - uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MiniTaskClon-firmado
+          path: signed/
